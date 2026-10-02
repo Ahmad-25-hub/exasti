@@ -1,6 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import Navbar from './components/Navbar';
+import Sidebar from './components/Sidebar';
 import KanbanBoard from './components/KanbanBoard';
+import TeamView from './components/TeamView';
+import OverviewView from './components/OverviewView';
 import AddTaskModal from './components/AddTaskModal';
 import EditTaskModal from './components/EditTaskModal';
 import AuthModal from './components/AuthModal';
@@ -12,12 +15,12 @@ import {
   RotateCcw, 
   Loader2, 
   AlertCircle, 
-  Database, 
   CheckCircle2, 
   Building2, 
   KeyRound, 
   Copy, 
-  Check 
+  Check,
+  CheckSquare
 } from 'lucide-react';
 
 export default function App() {
@@ -35,21 +38,25 @@ export default function App() {
   const [workspaces, setWorkspaces] = useState([]);
   const [currentWorkspace, setCurrentWorkspace] = useState(null);
   const [isWorkspaceModalOpen, setIsWorkspaceModalOpen] = useState(false);
-  const [isLoadingWorkspaces, setIsLoadingWorkspaces] = useState(false);
+  const [workspaceModalTab, setWorkspaceModalTab] = useState('list');
 
-  // 3. Task & Board States
+  // 3. Navigation & Sidebar States
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [activeView, setActiveView] = useState('board'); // 'board' | 'my-tasks' | 'team' | 'overview'
+
+  // 4. Task & Board States
   const [tasks, setTasks] = useState([]);
   const [isLoadingTasks, setIsLoadingTasks] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [notification, setNotification] = useState(null);
 
-  // 4. Modal States
+  // 5. Modal States
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [addModalInitialStatus, setAddModalInitialStatus] = useState('todo');
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [taskToEdit, setTaskToEdit] = useState(null);
 
-  // 5. Search Filter State
+  // 6. Search Filter State
   const [searchQuery, setSearchQuery] = useState('');
   const [copiedCode, setCopiedCode] = useState(false);
 
@@ -64,7 +71,6 @@ export default function App() {
   const loadWorkspaces = useCallback(async (userId, preferredWsId = null) => {
     if (!userId) return [];
     try {
-      setIsLoadingWorkspaces(true);
       const wsList = await taskApi.getUserWorkspaces(userId);
       setWorkspaces(wsList);
 
@@ -92,8 +98,6 @@ export default function App() {
       console.error('Error saat loadWorkspaces:', err);
       setErrorMessage(err.message || 'Gagal memuat daftar workspace');
       return [];
-    } finally {
-      setIsLoadingWorkspaces(false);
     }
   }, []);
 
@@ -152,6 +156,7 @@ export default function App() {
     setCurrentWorkspace(null);
     setWorkspaces([]);
     setTasks([]);
+    setActiveView('board');
     showToast('Anda telah keluar dari akun.');
   };
 
@@ -160,6 +165,11 @@ export default function App() {
     setCurrentWorkspace(ws);
     localStorage.setItem('kanban_active_ws', String(ws.id));
     showToast(`Beralih ke workspace "${ws.name}"`);
+  };
+
+  const handleOpenWorkspaceModal = (tab = 'list') => {
+    setWorkspaceModalTab(tab);
+    setIsWorkspaceModalOpen(true);
   };
 
   // Task Handlers
@@ -253,15 +263,18 @@ export default function App() {
   };
 
   // Metrics
+  const myTasksList = tasks.filter((t) => t.user_id === user?.id);
   const taskCounts = {
     total: tasks.length,
     todo: tasks.filter((t) => t.status === 'todo').length,
     inProgress: tasks.filter((t) => t.status === 'in-progress').length,
     done: tasks.filter((t) => t.status === 'done').length,
+    myTasks: myTasksList.length,
   };
 
-  // Filter tasks based on search
-  const filteredTasks = tasks.filter((task) => {
+  // Filter tasks based on view and search
+  const baseTasks = activeView === 'my-tasks' ? myTasksList : tasks;
+  const filteredTasks = baseTasks.filter((task) => {
     const query = searchQuery.toLowerCase();
     const titleMatch = task.title?.toLowerCase().includes(query);
     const descMatch = task.description?.toLowerCase().includes(query);
@@ -274,7 +287,7 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
+    <div className="min-h-screen bg-slate-50 flex font-sans">
       
       {/* Toast Notification */}
       {notification && (
@@ -284,202 +297,270 @@ export default function App() {
         </div>
       )}
 
-      {/* Top Navbar */}
-      <Navbar
-        user={user}
-        currentWorkspace={currentWorkspace}
-        onOpenWorkspaceModal={() => setIsWorkspaceModalOpen(true)}
-        onOpenAddModal={handleOpenAddModal}
-        taskCounts={taskCounts}
-        onLogout={handleLogout}
-      />
-
-      {/* Main Workspace Area */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-7">
-        
-        {/* Workspace Quick Invitation Banner */}
-        {currentWorkspace && (
-          <div className="mb-6 bg-gradient-to-r from-indigo-700 via-indigo-600 to-indigo-800 rounded-2xl p-5 text-white shadow-md flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div>
-              <div className="flex items-center gap-2">
-                <Building2 className="w-5 h-5 text-indigo-200" />
-                <h3 className="text-lg font-extrabold tracking-tight">
-                  {currentWorkspace.name}
-                </h3>
-              </div>
-              <p className="text-xs text-indigo-100/90 mt-1 max-w-xl">
-                {currentWorkspace.description || 'Ruang kerja tim untuk berkolaborasi dan mengelola progres tugas.'}
-              </p>
-            </div>
-
-            <div className="flex items-center gap-2 bg-white/10 backdrop-blur-md px-3.5 py-2 rounded-xl border border-white/20 self-start sm:self-auto">
-              <KeyRound className="w-4 h-4 text-amber-300" />
-              <div className="text-left">
-                <p className="text-[10px] text-indigo-200 font-semibold uppercase tracking-wider">
-                  Kode Undangan Tim
-                </p>
-                <p className="text-sm font-mono font-bold tracking-wider">
-                  {currentWorkspace.join_code}
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={handleCopyCurrentCode}
-                title="Salin kode untuk dibagikan ke teman kelompok"
-                className="ml-2 p-1.5 rounded-lg bg-white/20 hover:bg-white text-white hover:text-indigo-700 transition-all cursor-pointer"
-              >
-                {copiedCode ? <Check className="w-4 h-4 text-emerald-300" /> : <Copy className="w-4 h-4" />}
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Database & Connection Info Bar */}
-        <div className="mb-5 flex flex-wrap items-center justify-between gap-3 bg-white p-3.5 rounded-2xl border border-slate-200/80 shadow-2xs">
-          <div className="flex items-center gap-2 text-xs flex-wrap">
-            <span className="flex h-2.5 w-2.5 relative">
-              <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${errorMessage ? 'bg-rose-400' : 'bg-emerald-400'}`}></span>
-              <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${errorMessage ? 'bg-rose-500' : 'bg-emerald-500'}`}></span>
-            </span>
-            <span className="font-semibold text-slate-700">Database MySQL:</span>
-            <span className="px-2 py-0.5 rounded-md font-mono bg-slate-100 text-slate-800 font-bold text-[11px] border border-slate-200">
-              exasti
-            </span>
-            <span className="text-slate-300 hidden sm:inline">•</span>
-            <span className="text-slate-500 hidden sm:inline">
-              User Login: <strong>{user.name}</strong> ({user.email})
-            </span>
-          </div>
-
-          <button
-            onClick={() => {
-              if (currentWorkspace) loadTasks(currentWorkspace.id);
-            }}
-            disabled={isLoadingTasks}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-700 hover:text-indigo-600 hover:bg-slate-50 border border-slate-200 transition-colors cursor-pointer disabled:opacity-50"
-          >
-            <RotateCcw className={`w-3.5 h-3.5 ${isLoadingTasks ? 'animate-spin text-indigo-600' : ''}`} />
-            <span>Sinkronkan Data</span>
-          </button>
-        </div>
-
-        {/* Error Alert */}
-        {errorMessage && (
-          <div className="mb-6 p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 flex items-start gap-3 shadow-xs">
-            <AlertCircle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
-            <div className="flex-1 text-sm">
-              <p className="font-bold">Koneksi Backend / Database Gagal</p>
-              <p className="mt-1 text-xs text-rose-700 leading-relaxed">{errorMessage}</p>
-            </div>
-            <button
-              onClick={() => {
-                if (currentWorkspace) loadTasks(currentWorkspace.id);
-              }}
-              className="px-3.5 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-semibold shrink-0 cursor-pointer"
-            >
-              Coba Lagi
-            </button>
-          </div>
-        )}
-
-        {/* Action Header & Search */}
-        <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <h2 className="text-2xl font-extrabold text-slate-900 tracking-tight">
-              Papan Manajemen Tugas
-            </h2>
-            <div className="flex items-center gap-1.5 text-xs text-slate-500 mt-1">
-              <Info className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
-              <span>
-                Task pada board ini terisolasi untuk anggota workspace <strong>{currentWorkspace?.name}</strong>.
-              </span>
-            </div>
-          </div>
-
-          {/* Search Input */}
-          <div className="relative w-full sm:w-64">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Cari task..."
-              className="w-full pl-9 pr-3 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:outline-hidden focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 transition-all shadow-2xs font-medium"
-            />
-          </div>
-        </div>
-
-        {/* Search Results Notice if active */}
-        {searchQuery.trim() !== '' && (
-          <div className="mb-4 text-xs text-slate-600 bg-indigo-50/70 border border-indigo-100 px-3.5 py-2 rounded-xl flex items-center justify-between">
-            <span>
-              Menampilkan hasil pencarian untuk &ldquo;<strong>{searchQuery}</strong>&rdquo; ({filteredTasks.length} task ditemukan)
-            </span>
-            <button
-              onClick={() => setSearchQuery('')}
-              className="text-indigo-600 hover:text-indigo-800 font-semibold cursor-pointer"
-            >
-              Hapus Filter
-            </button>
-          </div>
-        )}
-
-        {/* Board Content */}
-        {isLoadingTasks && tasks.length === 0 ? (
-          <div className="py-28 flex flex-col items-center justify-center text-center bg-white/60 rounded-2xl border border-slate-200/60">
-            <Loader2 className="w-9 h-9 text-indigo-600 animate-spin mb-3" />
-            <p className="text-sm font-bold text-slate-800">
-              Memuat data task workspace dari MySQL...
-            </p>
-          </div>
-        ) : (
-          <KanbanBoard
-            tasks={filteredTasks}
-            onMoveTask={handleMoveTask}
-            onDeleteTask={handleDeleteTask}
-            onOpenAddModal={handleOpenAddModal}
-            onEditTask={handleOpenEditModal}
-          />
-        )}
-
-      </main>
-
-      {/* Add Task Modal */}
-      <AddTaskModal
-        isOpen={isAddModalOpen}
-        onClose={() => setIsAddModalOpen(false)}
-        onAddTask={handleAddTask}
-        initialStatus={addModalInitialStatus}
-      />
-
-      {/* Edit Task Modal */}
-      <EditTaskModal
-        isOpen={isEditModalOpen}
-        task={taskToEdit}
-        onClose={() => {
-          setIsEditModalOpen(false);
-          setTaskToEdit(null);
-        }}
-        onSaveTask={handleSaveEditTask}
-      />
-
-      {/* Workspace Management Modal */}
-      <WorkspaceModal
-        isOpen={isWorkspaceModalOpen}
-        onClose={() => setIsWorkspaceModalOpen(false)}
+      {/* Modern Sidebar */}
+      <Sidebar
+        isOpen={isSidebarOpen}
+        onClose={() => setIsSidebarOpen(false)}
         user={user}
         workspaces={workspaces}
         currentWorkspace={currentWorkspace}
         onSelectWorkspace={handleSelectWorkspace}
-        onWorkspacesUpdated={() => loadWorkspaces(user.id)}
+        onOpenWorkspaceModal={handleOpenWorkspaceModal}
+        activeView={activeView}
+        setActiveView={setActiveView}
+        taskCounts={taskCounts}
+        onLogout={handleLogout}
       />
 
-      {/* Footer */}
-      <footer className="border-t border-slate-200/80 bg-white py-4 mt-auto">
-        <div className="max-w-7xl mx-auto px-4 text-center text-xs text-slate-400">
-          Tugas Kuliah • Kanban Board Fullstack • Multi-Workspace &amp; Kode Undangan MySQL (`exasti`)
-        </div>
-      </footer>
+      {/* Main Content Layout with Sidebar Offset */}
+      <div className="flex-1 flex flex-col min-w-0 lg:pl-72">
+        {/* Top Sticky Navbar */}
+        <Navbar
+          user={user}
+          currentWorkspace={currentWorkspace}
+          onToggleSidebar={() => setIsSidebarOpen((prev) => !prev)}
+          activeView={activeView}
+          onOpenWorkspaceModal={handleOpenWorkspaceModal}
+          onOpenAddModal={handleOpenAddModal}
+          taskCounts={taskCounts}
+          onLogout={handleLogout}
+        />
+
+        {/* Main Body */}
+        <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-7">
+          
+          {/* View 1: Anggota Tim (Team View) */}
+          {activeView === 'team' && (
+            <TeamView
+              currentWorkspace={currentWorkspace}
+              user={user}
+              onBackToBoard={() => setActiveView('board')}
+              onOpenWorkspaceModal={handleOpenWorkspaceModal}
+            />
+          )}
+
+          {/* View 2: Ringkasan & Progres (Overview View) */}
+          {activeView === 'overview' && (
+            <OverviewView
+              currentWorkspace={currentWorkspace}
+              tasks={tasks}
+              taskCounts={taskCounts}
+              onBackToBoard={() => setActiveView('board')}
+              onOpenAddModal={handleOpenAddModal}
+              onOpenTeamView={() => setActiveView('team')}
+            />
+          )}
+
+          {/* View 3 & 4: Papan Kanban (Board) & Tugas Saya (My Tasks) */}
+          {(activeView === 'board' || activeView === 'my-tasks') && (
+            <>
+              {/* My Tasks Banner notification */}
+              {activeView === 'my-tasks' && (
+                <div className="mb-5 p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
+                  <div className="flex items-center gap-2 text-xs font-medium">
+                    <CheckSquare className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span>
+                      Menampilkan tugas yang dibuat oleh Anda (<strong>{user.name}</strong>) — {myTasksList.length} tugas ditemukan.
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => setActiveView('board')}
+                    className="text-xs font-bold text-emerald-700 hover:text-emerald-900 underline cursor-pointer shrink-0 self-start sm:self-auto"
+                  >
+                    Tampilkan Semua Tugas Tim
+                  </button>
+                </div>
+              )}
+
+              {/* Workspace Quick Invitation Banner */}
+              {currentWorkspace && activeView === 'board' && (
+                <div className="mb-6 bg-gradient-to-r from-indigo-700 via-indigo-600 to-indigo-800 rounded-2xl p-5 text-white shadow-md flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <Building2 className="w-5 h-5 text-indigo-200" />
+                      <h3 className="text-lg font-extrabold tracking-tight">
+                        {currentWorkspace.name}
+                      </h3>
+                    </div>
+                    <p className="text-xs text-indigo-100/90 mt-1 max-w-xl">
+                      {currentWorkspace.description || 'Ruang kerja tim untuk berkolaborasi dan mengelola progres tugas.'}
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2 bg-white/10 backdrop-blur-md px-3.5 py-2 rounded-xl border border-white/20 self-start sm:self-auto">
+                    <KeyRound className="w-4 h-4 text-amber-300" />
+                    <div className="text-left">
+                      <p className="text-[10px] text-indigo-200 font-semibold uppercase tracking-wider">
+                        Kode Undangan Tim
+                      </p>
+                      <p className="text-sm font-mono font-bold tracking-wider">
+                        {currentWorkspace.join_code}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleCopyCurrentCode}
+                      title="Salin kode untuk dibagikan ke teman kelompok"
+                      className="ml-2 p-1.5 rounded-lg bg-white/20 hover:bg-white text-white hover:text-indigo-700 transition-all cursor-pointer"
+                    >
+                      {copiedCode ? <Check className="w-4 h-4 text-emerald-300" /> : <Copy className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Database & Connection Info Bar */}
+              <div className="mb-5 flex flex-wrap items-center justify-between gap-3 bg-white p-3.5 rounded-2xl border border-slate-200/80 shadow-2xs">
+                <div className="flex items-center gap-2 text-xs flex-wrap">
+                  <span className="flex h-2.5 w-2.5 relative">
+                    <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${errorMessage ? 'bg-rose-400' : 'bg-emerald-400'}`}></span>
+                    <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${errorMessage ? 'bg-rose-500' : 'bg-emerald-500'}`}></span>
+                  </span>
+                  <span className="font-semibold text-slate-700">Database MySQL:</span>
+                  <span className="px-2 py-0.5 rounded-md font-mono bg-slate-100 text-slate-800 font-bold text-[11px] border border-slate-200">
+                    exasti
+                  </span>
+                  <span className="text-slate-300 hidden sm:inline">•</span>
+                  <span className="text-slate-500 hidden sm:inline">
+                    User Login: <strong>{user.name}</strong> ({user.email})
+                  </span>
+                </div>
+
+                <button
+                  onClick={() => {
+                    if (currentWorkspace) loadTasks(currentWorkspace.id);
+                  }}
+                  disabled={isLoadingTasks}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-700 hover:text-indigo-600 hover:bg-slate-50 border border-slate-200 transition-colors cursor-pointer disabled:opacity-50"
+                >
+                  <RotateCcw className={`w-3.5 h-3.5 ${isLoadingTasks ? 'animate-spin text-indigo-600' : ''}`} />
+                  <span>Sinkronkan Data</span>
+                </button>
+              </div>
+
+              {/* Error Alert */}
+              {errorMessage && (
+                <div className="mb-6 p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 flex items-start gap-3 shadow-xs">
+                  <AlertCircle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+                  <div className="flex-1 text-sm">
+                    <p className="font-bold">Koneksi Backend / Database Gagal</p>
+                    <p className="mt-1 text-xs text-rose-700 leading-relaxed">{errorMessage}</p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      if (currentWorkspace) loadTasks(currentWorkspace.id);
+                    }}
+                    className="px-3.5 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-semibold shrink-0 cursor-pointer"
+                  >
+                    Coba Lagi
+                  </button>
+                </div>
+              )}
+
+              {/* Action Header & Search */}
+              <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <div>
+                  <h2 className="text-2xl font-extrabold text-slate-900 tracking-tight">
+                    {activeView === 'my-tasks' ? 'Daftar Tugas Saya' : 'Papan Manajemen Tugas'}
+                  </h2>
+                  <div className="flex items-center gap-1.5 text-xs text-slate-500 mt-1">
+                    <Info className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+                    <span>
+                      {activeView === 'my-tasks'
+                        ? 'Menyaring kartu tugas yang Anda buat di workspace ini.'
+                        : `Task pada board ini terisolasi untuk anggota workspace ${currentWorkspace?.name || ''}.`}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Search Input */}
+                <div className="relative w-full sm:w-64">
+                  <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Cari task..."
+                    className="w-full pl-9 pr-3 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:outline-hidden focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 transition-all shadow-2xs font-medium"
+                  />
+                </div>
+              </div>
+
+              {/* Search Results Notice if active */}
+              {searchQuery.trim() !== '' && (
+                <div className="mb-4 text-xs text-slate-600 bg-indigo-50/70 border border-indigo-100 px-3.5 py-2 rounded-xl flex items-center justify-between">
+                  <span>
+                    Menampilkan hasil pencarian untuk &ldquo;<strong>{searchQuery}</strong>&rdquo; ({filteredTasks.length} task ditemukan)
+                  </span>
+                  <button
+                    onClick={() => setSearchQuery('')}
+                    className="text-indigo-600 hover:text-indigo-800 font-semibold cursor-pointer"
+                  >
+                    Hapus Filter
+                  </button>
+                </div>
+              )}
+
+              {/* Board Content */}
+              {isLoadingTasks && tasks.length === 0 ? (
+                <div className="py-28 flex flex-col items-center justify-center text-center bg-white/60 rounded-2xl border border-slate-200/60">
+                  <Loader2 className="w-9 h-9 text-indigo-600 animate-spin mb-3" />
+                  <p className="text-sm font-bold text-slate-800">
+                    Memuat data task workspace dari MySQL...
+                  </p>
+                </div>
+              ) : (
+                <KanbanBoard
+                  tasks={filteredTasks}
+                  onMoveTask={handleMoveTask}
+                  onDeleteTask={handleDeleteTask}
+                  onOpenAddModal={handleOpenAddModal}
+                  onEditTask={handleOpenEditModal}
+                />
+              )}
+            </>
+          )}
+
+        </main>
+
+        {/* Add Task Modal */}
+        <AddTaskModal
+          isOpen={isAddModalOpen}
+          onClose={() => setIsAddModalOpen(false)}
+          onAddTask={handleAddTask}
+          initialStatus={addModalInitialStatus}
+        />
+
+        {/* Edit Task Modal */}
+        <EditTaskModal
+          isOpen={isEditModalOpen}
+          task={taskToEdit}
+          onClose={() => {
+            setIsEditModalOpen(false);
+            setTaskToEdit(null);
+          }}
+          onSaveTask={handleSaveEditTask}
+        />
+
+        {/* Workspace Management Modal */}
+        <WorkspaceModal
+          isOpen={isWorkspaceModalOpen}
+          onClose={() => setIsWorkspaceModalOpen(false)}
+          user={user}
+          workspaces={workspaces}
+          currentWorkspace={currentWorkspace}
+          onSelectWorkspace={handleSelectWorkspace}
+          onWorkspacesUpdated={() => loadWorkspaces(user.id)}
+          initialTab={workspaceModalTab}
+        />
+
+        {/* Footer */}
+        <footer className="border-t border-slate-200/80 bg-white py-4 mt-auto">
+          <div className="max-w-7xl mx-auto px-4 text-center text-xs text-slate-400">
+            Tugas Kuliah • Kanban Board Fullstack • Multi-Workspace &amp; Kode Undangan MySQL (`exasti`)
+          </div>
+        </footer>
+      </div>
 
     </div>
   );
