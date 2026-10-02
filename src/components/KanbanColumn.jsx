@@ -1,16 +1,22 @@
 import React, { useState } from 'react';
 import TaskCard from './TaskCard';
-import { Plus, Inbox } from 'lucide-react';
+import { Plus, Inbox, MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
 
 export default function KanbanColumn({
   column,
+  columns = [],
   tasks,
   onMoveTask,
   onDeleteTask,
   onOpenAddModal,
   onEditTask,
+  onEditColumn,
+  onDeleteColumn,
+  canDelete = true,
 }) {
   const [isDragOver, setIsDragOver] = useState(false);
+  const [showMenu, setShowMenu] = useState(false);
+  const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
 
   const handleDragOver = (e) => {
     e.preventDefault();
@@ -34,41 +40,111 @@ export default function KanbanColumn({
     }
   };
 
+  const handleDeleteClick = () => {
+    if (isConfirmingDelete) {
+      if (onDeleteColumn) {
+        onDeleteColumn(column);
+      }
+      setIsConfirmingDelete(false);
+      setShowMenu(false);
+    } else {
+      setIsConfirmingDelete(true);
+      setTimeout(() => setIsConfirmingDelete(false), 3500);
+    }
+  };
+
   return (
     <div
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
-      className={`flex flex-col bg-slate-100/90 rounded-2xl border-2 transition-all duration-200 min-h-[550px] ${
+      className={`flex flex-col bg-slate-100/90 rounded-2xl border-2 transition-all duration-200 min-h-[550px] w-80 shrink-0 ${
         isDragOver
           ? 'border-dashed border-indigo-500 bg-indigo-50/50 shadow-inner'
           : 'border-slate-200/80 shadow-xs'
       }`}
     >
       {/* Column Header */}
-      <div className={`p-4 rounded-t-2xl border-t-4 bg-white border-b border-slate-200/80 ${column.headerAccent}`}>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className={`w-2.5 h-2.5 rounded-full ${column.indicatorBg}`} />
-            <h3 className="font-bold text-slate-800 text-base tracking-tight">
+      <div className={`p-4 rounded-t-2xl border-t-4 bg-white border-b border-slate-200/80 relative ${column.headerAccent || 'border-t-indigo-500'}`}>
+        <div className="flex items-center justify-between gap-1.5">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${column.indicatorBg || 'bg-indigo-500'}`} />
+            <h3 className="font-bold text-slate-800 text-base tracking-tight truncate" title={column.title}>
               {column.title}
             </h3>
-            <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${column.badgeColor}`}>
+            <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border shrink-0 ${column.badgeColor || 'bg-indigo-100 text-indigo-800 border-indigo-200'}`}>
               {tasks.length}
             </span>
           </div>
 
-          <button
-            onClick={() => onOpenAddModal(column.id)}
-            title={`Tambah task ke ${column.title}`}
-            className="p-1 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-slate-100 transition-colors cursor-pointer"
-          >
-            <Plus className="w-4 h-4" />
-          </button>
+          <div className="flex items-center gap-1 shrink-0">
+            {/* Add Task Button */}
+            <button
+              onClick={() => onOpenAddModal(column.id)}
+              title={`Tambah task ke ${column.title}`}
+              className="p-1 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-slate-100 transition-colors cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+            </button>
+
+            {/* Column Options Menu Button */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setShowMenu(!showMenu)}
+                title="Opsi Kolom Board"
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                <MoreHorizontal className="w-4 h-4" />
+              </button>
+
+              {/* Dropdown Menu */}
+              {showMenu && (
+                <>
+                  <div 
+                    className="fixed inset-0 z-20" 
+                    onClick={() => { setShowMenu(false); setIsConfirmingDelete(false); }} 
+                  />
+                  <div className="absolute right-0 top-full mt-1 w-44 bg-white rounded-xl shadow-xl border border-slate-200 py-1.5 z-30 animate-in fade-in duration-100 text-xs">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowMenu(false);
+                        if (onEditColumn) onEditColumn(column);
+                      }}
+                      className="w-full px-3 py-2 text-left flex items-center gap-2 text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer"
+                    >
+                      <Pencil className="w-3.5 h-3.5 text-slate-400" />
+                      <span>Edit Kolom</span>
+                    </button>
+
+                    {canDelete && (
+                      <button
+                        type="button"
+                        onClick={handleDeleteClick}
+                        className={`w-full px-3 py-2 text-left flex items-center gap-2 transition-colors cursor-pointer ${
+                          isConfirmingDelete 
+                            ? 'bg-rose-50 text-rose-700 font-bold' 
+                            : 'text-rose-600 hover:bg-rose-50'
+                        }`}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>{isConfirmingDelete ? 'Yakin Hapus Kolom?' : 'Hapus Kolom'}</span>
+                      </button>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+
+          </div>
         </div>
-        <p className="mt-1 text-xs text-slate-500 line-clamp-1">
-          {column.description}
-        </p>
+
+        {column.description && (
+          <p className="mt-1 text-xs text-slate-500 line-clamp-1" title={column.description}>
+            {column.description}
+          </p>
+        )}
       </div>
 
       {/* Task List / Drop Zone */}
@@ -90,6 +166,7 @@ export default function KanbanColumn({
             <TaskCard
               key={task.id}
               task={task}
+              columns={columns}
               onMoveTask={onMoveTask}
               onDeleteTask={onDeleteTask}
               onEditTask={onEditTask}

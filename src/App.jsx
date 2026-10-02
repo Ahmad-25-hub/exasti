@@ -3,21 +3,23 @@ import Navbar from './components/Navbar';
 import KanbanBoard from './components/KanbanBoard';
 import AddTaskModal from './components/AddTaskModal';
 import EditTaskModal from './components/EditTaskModal';
+import ColumnModal from './components/ColumnModal';
 import AuthModal from './components/AuthModal';
 import WorkspaceModal from './components/WorkspaceModal';
 import { taskApi } from './services/taskApi';
+import { formatColumn, COLUMNS } from './data/initialTasks';
 import { 
   Search, 
   Info, 
   RotateCcw, 
   Loader2, 
   AlertCircle, 
-  Database, 
   CheckCircle2, 
   Building2, 
   KeyRound, 
   Copy, 
-  Check 
+  Check,
+  Plus
 } from 'lucide-react';
 
 export default function App() {
@@ -37,19 +39,25 @@ export default function App() {
   const [isWorkspaceModalOpen, setIsWorkspaceModalOpen] = useState(false);
   const [isLoadingWorkspaces, setIsLoadingWorkspaces] = useState(false);
 
-  // 3. Task & Board States
+  // 3. Dynamic Columns / Boards States
+  const [columns, setColumns] = useState([]);
+  const [isLoadingColumns, setIsLoadingColumns] = useState(false);
+  const [isColumnModalOpen, setIsColumnModalOpen] = useState(false);
+  const [columnToEdit, setColumnToEdit] = useState(null);
+
+  // 4. Task & Board States
   const [tasks, setTasks] = useState([]);
   const [isLoadingTasks, setIsLoadingTasks] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [notification, setNotification] = useState(null);
 
-  // 4. Modal States
+  // 5. Modal States
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [addModalInitialStatus, setAddModalInitialStatus] = useState('todo');
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [taskToEdit, setTaskToEdit] = useState(null);
 
-  // 5. Search Filter State
+  // 6. Search Filter State
   const [searchQuery, setSearchQuery] = useState('');
   const [copiedCode, setCopiedCode] = useState(false);
 
@@ -97,6 +105,25 @@ export default function App() {
     }
   }, []);
 
+  // Fetch columns per workspace
+  const loadColumns = useCallback(async (workspaceId) => {
+    if (!workspaceId) {
+      setColumns([]);
+      return;
+    }
+    try {
+      setIsLoadingColumns(true);
+      const data = await taskApi.getColumns(workspaceId);
+      const formatted = Array.isArray(data) ? data.map(formatColumn) : [];
+      setColumns(formatted.length > 0 ? formatted : COLUMNS.map(formatColumn));
+    } catch (err) {
+      console.error('Error saat loadColumns:', err);
+      setColumns(COLUMNS.map(formatColumn));
+    } finally {
+      setIsLoadingColumns(false);
+    }
+  }, []);
+
   // Fetch tasks for the active workspace
   const loadTasks = useCallback(async (workspaceId) => {
     if (!workspaceId) {
@@ -126,17 +153,20 @@ export default function App() {
       setWorkspaces([]);
       setCurrentWorkspace(null);
       setTasks([]);
+      setColumns([]);
     }
   }, [user, loadWorkspaces]);
 
-  // Effect saat currentWorkspace berubah -> load tasks
+  // Effect saat currentWorkspace berubah -> load tasks & columns
   useEffect(() => {
     if (currentWorkspace && currentWorkspace.id) {
+      loadColumns(currentWorkspace.id);
       loadTasks(currentWorkspace.id);
     } else {
       setTasks([]);
+      setColumns([]);
     }
-  }, [currentWorkspace, loadTasks]);
+  }, [currentWorkspace, loadTasks, loadColumns]);
 
   // Auth Handlers
   const handleAuthSuccess = (userData) => {
@@ -152,6 +182,7 @@ export default function App() {
     setCurrentWorkspace(null);
     setWorkspaces([]);
     setTasks([]);
+    setColumns([]);
     showToast('Anda telah keluar dari akun.');
   };
 
@@ -162,9 +193,50 @@ export default function App() {
     showToast(`Beralih ke workspace "${ws.name}"`);
   };
 
+  // Column CRUD Handlers
+  const handleOpenAddColumnModal = () => {
+    setColumnToEdit(null);
+    setIsColumnModalOpen(true);
+  };
+
+  const handleOpenEditColumnModal = (col) => {
+    setColumnToEdit(col);
+    setIsColumnModalOpen(true);
+  };
+
+  const handleSaveColumn = async (payload) => {
+    if (!currentWorkspace?.id) return;
+    if (columnToEdit) {
+      await taskApi.updateColumn(columnToEdit.column_id, payload);
+      showToast(`Kolom "${payload.title}" berhasil diperbarui!`);
+    } else {
+      await taskApi.createColumn({
+        workspaceId: currentWorkspace.id,
+        ...payload,
+      });
+      showToast(`Kolom "${payload.title}" berhasil ditambahkan ke workspace!`);
+    }
+    await loadColumns(currentWorkspace.id);
+    await loadTasks(currentWorkspace.id);
+  };
+
+  const handleDeleteColumn = async (col) => {
+    if (!currentWorkspace?.id) return;
+    try {
+      await taskApi.deleteColumn(col.column_id);
+      showToast(`Kolom "${col.title}" berhasil dihapus.`);
+      await loadColumns(currentWorkspace.id);
+      await loadTasks(currentWorkspace.id);
+    } catch (err) {
+      console.error(err);
+      alert(`Gagal menghapus kolom: ${err.message}`);
+    }
+  };
+
   // Task Handlers
-  const handleOpenAddModal = (status = 'todo') => {
-    setAddModalInitialStatus(status);
+  const handleOpenAddModal = (status = null) => {
+    const defaultStatus = status || (columns.length > 0 ? columns[0].id : 'todo');
+    setAddModalInitialStatus(defaultStatus);
     setIsAddModalOpen(true);
   };
 
@@ -252,14 +324,6 @@ export default function App() {
     setTimeout(() => setCopiedCode(false), 2500);
   };
 
-  // Metrics
-  const taskCounts = {
-    total: tasks.length,
-    todo: tasks.filter((t) => t.status === 'todo').length,
-    inProgress: tasks.filter((t) => t.status === 'in-progress').length,
-    done: tasks.filter((t) => t.status === 'done').length,
-  };
-
   // Filter tasks based on search
   const filteredTasks = tasks.filter((task) => {
     const query = searchQuery.toLowerCase();
@@ -267,6 +331,9 @@ export default function App() {
     const descMatch = task.description?.toLowerCase().includes(query);
     return titleMatch || descMatch;
   });
+
+  // Effective columns list
+  const effectiveColumns = columns.length > 0 ? columns : COLUMNS.map(formatColumn);
 
   // Jika belum login, tampilkan layar Auth
   if (!user) {
@@ -290,12 +357,13 @@ export default function App() {
         currentWorkspace={currentWorkspace}
         onOpenWorkspaceModal={() => setIsWorkspaceModalOpen(true)}
         onOpenAddModal={handleOpenAddModal}
-        taskCounts={taskCounts}
+        columns={effectiveColumns}
+        tasks={tasks}
         onLogout={handleLogout}
       />
 
       {/* Main Workspace Area */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-7">
+      <main className="flex-1 w-full max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-7">
         
         {/* Workspace Quick Invitation Banner */}
         {currentWorkspace && (
@@ -347,20 +415,37 @@ export default function App() {
             </span>
             <span className="text-slate-300 hidden sm:inline">•</span>
             <span className="text-slate-500 hidden sm:inline">
-              User Login: <strong>{user.name}</strong> ({user.email})
+              Workspace Aktif: <strong>{currentWorkspace?.name}</strong> ({effectiveColumns.length} Kolom Board)
+            </span>
+            <span className="text-slate-300 hidden sm:inline">•</span>
+            <span className="text-slate-500 hidden sm:inline">
+              User: <strong>{user.name}</strong>
             </span>
           </div>
 
-          <button
-            onClick={() => {
-              if (currentWorkspace) loadTasks(currentWorkspace.id);
-            }}
-            disabled={isLoadingTasks}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-700 hover:text-indigo-600 hover:bg-slate-50 border border-slate-200 transition-colors cursor-pointer disabled:opacity-50"
-          >
-            <RotateCcw className={`w-3.5 h-3.5 ${isLoadingTasks ? 'animate-spin text-indigo-600' : ''}`} />
-            <span>Sinkronkan Data</span>
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleOpenAddColumnModal}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 transition-colors cursor-pointer"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Tambah Kolom</span>
+            </button>
+
+            <button
+              onClick={() => {
+                if (currentWorkspace) {
+                  loadColumns(currentWorkspace.id);
+                  loadTasks(currentWorkspace.id);
+                }
+              }}
+              disabled={isLoadingTasks || isLoadingColumns}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-700 hover:text-indigo-600 hover:bg-slate-50 border border-slate-200 transition-colors cursor-pointer disabled:opacity-50"
+            >
+              <RotateCcw className={`w-3.5 h-3.5 ${(isLoadingTasks || isLoadingColumns) ? 'animate-spin text-indigo-600' : ''}`} />
+              <span>Sinkronkan Data</span>
+            </button>
+          </div>
         </div>
 
         {/* Error Alert */}
@@ -373,7 +458,10 @@ export default function App() {
             </div>
             <button
               onClick={() => {
-                if (currentWorkspace) loadTasks(currentWorkspace.id);
+                if (currentWorkspace) {
+                  loadColumns(currentWorkspace.id);
+                  loadTasks(currentWorkspace.id);
+                }
               }}
               className="px-3.5 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-semibold shrink-0 cursor-pointer"
             >
@@ -391,7 +479,7 @@ export default function App() {
             <div className="flex items-center gap-1.5 text-xs text-slate-500 mt-1">
               <Info className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
               <span>
-                Task pada board ini terisolasi untuk anggota workspace <strong>{currentWorkspace?.name}</strong>.
+                Setiap workspace memiliki kolom board dan alur tugas kustom tersendiri.
               </span>
             </div>
           </div>
@@ -425,20 +513,24 @@ export default function App() {
         )}
 
         {/* Board Content */}
-        {isLoadingTasks && tasks.length === 0 ? (
+        {(isLoadingTasks && tasks.length === 0) || (isLoadingColumns && columns.length === 0) ? (
           <div className="py-28 flex flex-col items-center justify-center text-center bg-white/60 rounded-2xl border border-slate-200/60">
             <Loader2 className="w-9 h-9 text-indigo-600 animate-spin mb-3" />
             <p className="text-sm font-bold text-slate-800">
-              Memuat data task workspace dari MySQL...
+              Memuat data board &amp; task workspace dari MySQL...
             </p>
           </div>
         ) : (
           <KanbanBoard
+            columns={effectiveColumns}
             tasks={filteredTasks}
             onMoveTask={handleMoveTask}
             onDeleteTask={handleDeleteTask}
             onOpenAddModal={handleOpenAddModal}
             onEditTask={handleOpenEditModal}
+            onOpenAddColumnModal={handleOpenAddColumnModal}
+            onEditColumn={handleOpenEditColumnModal}
+            onDeleteColumn={handleDeleteColumn}
           />
         )}
 
@@ -449,6 +541,7 @@ export default function App() {
         isOpen={isAddModalOpen}
         onClose={() => setIsAddModalOpen(false)}
         onAddTask={handleAddTask}
+        columns={effectiveColumns}
         initialStatus={addModalInitialStatus}
       />
 
@@ -456,11 +549,23 @@ export default function App() {
       <EditTaskModal
         isOpen={isEditModalOpen}
         task={taskToEdit}
+        columns={effectiveColumns}
         onClose={() => {
           setIsEditModalOpen(false);
           setTaskToEdit(null);
         }}
         onSaveTask={handleSaveEditTask}
+      />
+
+      {/* Add / Edit Column Modal */}
+      <ColumnModal
+        isOpen={isColumnModalOpen}
+        columnToEdit={columnToEdit}
+        onClose={() => {
+          setIsColumnModalOpen(false);
+          setColumnToEdit(null);
+        }}
+        onSaveColumn={handleSaveColumn}
       />
 
       {/* Workspace Management Modal */}
@@ -477,7 +582,7 @@ export default function App() {
       {/* Footer */}
       <footer className="border-t border-slate-200/80 bg-white py-4 mt-auto">
         <div className="max-w-7xl mx-auto px-4 text-center text-xs text-slate-400">
-          Tugas Kuliah • Kanban Board Fullstack • Multi-Workspace &amp; Kode Undangan MySQL (`exasti`)
+          Tugas Kuliah • Kanban Board Fullstack • Multi-Workspace &amp; Dynamic Boards MySQL (`exasti`)
         </div>
       </footer>
 

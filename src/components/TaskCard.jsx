@@ -6,35 +6,27 @@ import {
   ArrowRight, 
   ArrowLeft, 
   GripVertical,
-  CheckCircle2,
-  Clock,
   CircleDot
 } from 'lucide-react';
 
-export default function TaskCard({ task, onMoveTask, onDeleteTask, onEditTask }) {
+export default function TaskCard({ 
+  task, 
+  columns = [],
+  onMoveTask, 
+  onDeleteTask, 
+  onEditTask 
+}) {
   const [isDeleting, setIsDeleting] = useState(false);
 
-  // Status configuration details
-  const statusMeta = {
-    'todo': {
-      label: 'To Do',
-      color: 'bg-amber-50 text-amber-700 border-amber-200',
-      icon: CircleDot,
-    },
-    'in-progress': {
-      label: 'In Progress',
-      color: 'bg-blue-50 text-blue-700 border-blue-200',
-      icon: Clock,
-    },
-    'done': {
-      label: 'Done',
-      color: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-      icon: CheckCircle2,
-    },
-  };
+  // Cari metadata kolom saat ini dari daftar columns dinamis
+  const currentCol = columns.find((c) => c.id === task.status);
+  const currentTitle = currentCol ? currentCol.title : task.status;
+  const badgeColor = currentCol?.badgeColor || 'bg-slate-100 text-slate-700 border-slate-200';
 
-  const currentMeta = statusMeta[task.status] || statusMeta['todo'];
-  const StatusIcon = currentMeta.icon;
+  // Posisi prev & next column
+  const currentIndex = columns.findIndex((c) => c.id === task.status);
+  const prevCol = currentIndex > 0 ? columns[currentIndex - 1] : null;
+  const nextCol = currentIndex >= 0 && currentIndex < columns.length - 1 ? columns[currentIndex + 1] : null;
 
   const handleDragStart = (e) => {
     e.dataTransfer.setData('taskId', String(task.id));
@@ -65,9 +57,9 @@ export default function TaskCard({ task, onMoveTask, onDeleteTask, onEditTask })
           <span className="text-[11px] font-mono font-semibold px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-600 border border-slate-200">
             #{task.id}
           </span>
-          <span className={`inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-md border ${currentMeta.color}`}>
-            <StatusIcon className="w-3 h-3" />
-            {currentMeta.label}
+          <span className={`inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-md border ${badgeColor}`}>
+            <CircleDot className="w-3 h-3" />
+            <span className="max-w-[120px] truncate">{currentTitle}</span>
           </span>
         </div>
 
@@ -116,7 +108,7 @@ export default function TaskCard({ task, onMoveTask, onDeleteTask, onEditTask })
         )}
       </div>
 
-      {/* Footer: Date and Move Action Controls */}
+      {/* Footer: Date, Creator and Move Action Controls */}
       <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-2 mt-auto">
         <div className="flex items-center gap-2 text-[11px] text-slate-400 font-medium flex-wrap">
           <div className="flex items-center gap-1">
@@ -130,59 +122,27 @@ export default function TaskCard({ task, onMoveTask, onDeleteTask, onEditTask })
           )}
         </div>
 
-        {/* Move Buttons */}
+        {/* Dynamic Move Buttons */}
         <div className="flex items-center gap-1">
-          {task.status === 'in-progress' && (
+          {prevCol && (
             <button
-              onClick={() => onMoveTask(task.id, 'todo')}
-              title="Pindahkan ke To Do"
-              className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-medium rounded-md bg-slate-50 hover:bg-amber-50 hover:text-amber-700 hover:border-amber-200 border border-slate-200 text-slate-600 transition-colors cursor-pointer"
+              onClick={() => onMoveTask(task.id, prevCol.id)}
+              title={`Pindahkan ke ${prevCol.title}`}
+              className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-medium rounded-md bg-slate-50 hover:bg-slate-100 hover:text-slate-800 border border-slate-200 text-slate-600 transition-colors cursor-pointer"
             >
               <ArrowLeft className="w-3 h-3" />
-              <span>To Do</span>
+              <span className="max-w-[65px] truncate">{prevCol.title}</span>
             </button>
           )}
 
-          {task.status === 'done' && (
+          {nextCol && (
             <button
-              onClick={() => onMoveTask(task.id, 'in-progress')}
-              title="Kembalikan ke In Progress"
-              className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-medium rounded-md bg-slate-50 hover:bg-blue-50 hover:text-blue-700 hover:border-blue-200 border border-slate-200 text-slate-600 transition-colors cursor-pointer"
+              onClick={() => onMoveTask(task.id, nextCol.id)}
+              title={`Pindahkan ke ${nextCol.title}`}
+              className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-medium rounded-md bg-indigo-50 hover:bg-indigo-100 hover:text-indigo-800 border border-indigo-200 text-indigo-700 transition-colors cursor-pointer"
             >
-              <ArrowLeft className="w-3 h-3" />
-              <span>In Progress</span>
-            </button>
-          )}
-
-          {task.status === 'todo' && (
-            <button
-              onClick={() => onMoveTask(task.id, 'in-progress')}
-              title="Pindahkan ke In Progress"
-              className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-medium rounded-md bg-slate-50 hover:bg-blue-50 hover:text-blue-700 hover:border-blue-200 border border-slate-200 text-slate-600 transition-colors cursor-pointer"
-            >
-              <span>Progress</span>
+              <span className="max-w-[65px] truncate">{nextCol.title}</span>
               <ArrowRight className="w-3 h-3" />
-            </button>
-          )}
-
-          {task.status === 'in-progress' && (
-            <button
-              onClick={() => onMoveTask(task.id, 'done')}
-              title="Pindahkan ke Done"
-              className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-medium rounded-md bg-slate-50 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200 border border-slate-200 text-slate-600 transition-colors cursor-pointer"
-            >
-              <span>Done</span>
-              <ArrowRight className="w-3 h-3" />
-            </button>
-          )}
-
-          {task.status === 'done' && (
-            <button
-              onClick={() => onMoveTask(task.id, 'todo')}
-              title="Pindahkan kembali ke To Do"
-              className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-medium rounded-md bg-slate-50 hover:bg-amber-50 hover:text-amber-700 hover:border-amber-200 border border-slate-200 text-slate-600 transition-colors cursor-pointer"
-            >
-              <span>Reset</span>
             </button>
           )}
         </div>

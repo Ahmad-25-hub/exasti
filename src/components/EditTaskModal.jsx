@@ -5,9 +5,11 @@ import { COLUMNS } from '../data/initialTasks';
 export default function EditTaskModal({
   isOpen,
   task,
+  columns = [],
   onClose,
   onSaveTask,
 }) {
+  const displayColumns = columns && columns.length > 0 ? columns : COLUMNS;
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [status, setStatus] = useState('todo');
@@ -147,8 +149,8 @@ export default function EditTaskModal({
             <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
               Status Kolom
             </label>
-            <div className="grid grid-cols-3 gap-2">
-              {COLUMNS.map((col) => {
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              {displayColumns.map((col) => {
                 const isSelected = status === col.id;
                 return (
                   <button
@@ -156,7 +158,7 @@ export default function EditTaskModal({
                     type="button"
                     disabled={isSubmitting}
                     onClick={() => setStatus(col.id)}
-                    className={`py-2 px-3 text-xs font-medium rounded-xl border transition-all text-center cursor-pointer disabled:opacity-50 ${
+                    className={`py-2 px-3 text-xs font-medium rounded-xl border transition-all text-center cursor-pointer disabled:opacity-50 truncate ${
                       isSelected
                         ? 'border-indigo-600 bg-indigo-50 text-indigo-700 ring-2 ring-indigo-200 font-semibold'
                         : 'border-slate-200 hover:border-slate-300 text-slate-600 bg-white'

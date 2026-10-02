@@ -18,10 +18,10 @@ export default function Navbar({
   currentWorkspace, 
   onOpenWorkspaceModal, 
   onOpenAddModal, 
-  taskCounts,
+  columns = [],
+  tasks = [],
   onLogout 
 }) {
-  const { todo = 0, inProgress = 0, done = 0 } = taskCounts || {};
   const [copied, setCopied] = useState(false);
 
   const handleCopyCode = () => {
@@ -98,23 +98,27 @@ export default function Navbar({
             
             {/* Quick Task Stats */}
             <div className="hidden lg:flex items-center gap-1.5 text-xs font-semibold text-slate-600 bg-slate-100 p-1 rounded-xl border border-slate-200">
-              <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-white shadow-2xs">
-                <ListTodo className="w-3.5 h-3.5 text-amber-500" />
-                <span>To Do: <strong className="text-slate-800">{todo}</strong></span>
+              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white shadow-2xs">
+                <ListTodo className="w-3.5 h-3.5 text-indigo-600" />
+                <span>Total: <strong className="text-slate-900">{tasks.length}</strong></span>
               </div>
-              <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-white shadow-2xs">
-                <Clock className="w-3.5 h-3.5 text-blue-500" />
-                <span>In Progress: <strong className="text-slate-800">{inProgress}</strong></span>
-              </div>
-              <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-white shadow-2xs">
-                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
-                <span>Done: <strong className="text-slate-800">{done}</strong></span>
-              </div>
+              {columns.slice(0, 3).map((col) => {
+                const count = tasks.filter((t) => t.status === col.id).length;
+                return (
+                  <div key={col.id} className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-white shadow-2xs">
+                    <span className={`w-2 h-2 rounded-full ${col.indicatorBg || 'bg-slate-400'}`} />
+                    <span className="truncate max-w-[85px]">{col.title}: <strong className="text-slate-800">{count}</strong></span>
+                  </div>
+                );
+              })}
+              {columns.length > 3 && (
+                <span className="px-1.5 text-[11px] text-slate-400 font-medium">+{columns.length - 3} kolom</span>
+              )}
             </div>
 
             {/* Add Task Button */}
             <button
-              onClick={() => onOpenAddModal('todo')}
+              onClick={() => onOpenAddModal(columns[0]?.id || 'todo')}
               className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white text-xs font-bold rounded-xl shadow-sm shadow-indigo-200 transition-colors cursor-pointer"
             >
               <Plus className="w-3.5 h-3.5" />

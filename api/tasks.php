@@ -28,13 +28,10 @@ switch ($method) {
 function normalizeStatus($status) {
     if (!$status) return 'todo';
     $status = strtolower(trim($status));
-    if ($status === 'in_progress' || $status === 'in-progress') {
+    if ($status === 'in_progress') {
         return 'in-progress';
     }
-    if ($status === 'done') {
-        return 'done';
-    }
-    return 'todo';
+    return $status;
 }
 
 /**

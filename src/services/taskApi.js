@@ -166,4 +166,40 @@ export const taskApi = {
     });
     return res.data;
   },
+
+  // ===============================
+  // 4. MANAJEMEN KOLOM / BOARD KUSTOM
+  // ===============================
+  async getColumns(workspaceId) {
+    const res = await makeRequest(`/columns.php?workspace_id=${workspaceId}`);
+    return res.data || [];
+  },
+
+  async createColumn({ workspaceId, title, description, color = 'indigo' }) {
+    const res = await makeRequest('/columns.php?action=create', {
+      method: 'POST',
+      body: JSON.stringify({
+        workspace_id: workspaceId,
+        title,
+        description,
+        color,
+      }),
+    });
+    return res.data;
+  },
+
+  async updateColumn(id, { title, description, color, position }) {
+    const res = await makeRequest(`/columns.php?id=${id}`, {
+      method: 'PUT',
+      body: JSON.stringify({ id, title, description, color, position }),
+    });
+    return res.data;
+  },
+
+  async deleteColumn(id) {
+    const res = await makeRequest(`/columns.php?id=${id}`, {
+      method: 'DELETE',
+    });
+    return res.data;
+  },
 };
