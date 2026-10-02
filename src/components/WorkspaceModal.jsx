@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Building2, 
   Plus, 
@@ -9,10 +9,10 @@ import {
   CheckCircle2, 
   AlertCircle, 
   Loader2, 
-  X,
-  Layers,
-  Crown,
-  ChevronRight
+  X, 
+  Layers, 
+  Crown, 
+  ChevronRight 
 } from 'lucide-react';
 import { taskApi } from '../services/taskApi';
 
@@ -24,9 +24,16 @@ export default function WorkspaceModal({
   currentWorkspace,
   onSelectWorkspace,
   onWorkspacesUpdated,
+  initialTab = 'list',
 }) {
-  const [activeTab, setActiveTab] = useState('list'); // 'list' | 'create' | 'join'
+  const [activeTab, setActiveTab] = useState(initialTab || 'list');
   const [copiedCode, setCopiedCode] = useState(null);
+
+  useEffect(() => {
+    if (isOpen && initialTab) {
+      setActiveTab(initialTab);
+    }
+  }, [isOpen, initialTab]);
 
   // Form states for creating workspace
   const [newName, setNewName] = useState('');
